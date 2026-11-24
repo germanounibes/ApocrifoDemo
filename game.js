@@ -22,6 +22,20 @@ const RUN_SPEED_Y = 118;     // Corrida em profundidade (Shift)
 const ACCEL_RATE = 0.16;     // Inércia de aceleração
 const DRAG_RATE = 0.20;      // Desaceleração suave ao soltar
 
+// Escala visual do Arthur em relação à imagem original de 96 x 128 px.
+// A arte fica maior ao chegar à frente da sala e menor perto da parede,
+// preservando a proporção típica de uma vista 2.5D.
+const ARTHUR_SCALE_BACK = 0.66;
+const ARTHUR_SCALE_FRONT = 0.82;
+const ARTHUR_INITIAL_SCALE = 0.72;
+
+// Hitbox em coordenadas locais da textura original. Ela é pequena apenas
+// na região dos pés, onde o personagem deve colidir com móveis e limites.
+const ARTHUR_HITBOX_WIDTH = 44;
+const ARTHUR_HITBOX_HEIGHT = 16;
+const ARTHUR_HITBOX_OFFSET_X = 26;
+const ARTHUR_HITBOX_OFFSET_Y = 112;
+
 
 /* =========================================
    CENA PRINCIPAL
@@ -31,6 +45,25 @@ class HouseScene extends Phaser.Scene {
 
     constructor() {
         super("HouseScene");
+    }
+
+    preload() {
+        this.load.image(
+            "arthur_idle_open",
+            "./assets/characters/FramesArthur/processed/arthur_idle_open.png"
+        );
+        this.load.image(
+            "arthur_idle_closed",
+            "./assets/characters/FramesArthur/processed/arthur_idle_closed.png"
+        );
+        this.load.image(
+            "arthur_walk_1",
+            "./assets/characters/FramesArthur/processed/arthur_walk1.png"
+        );
+        this.load.image(
+            "arthur_walk_2",
+            "./assets/characters/FramesArthur/processed/arthur_walk2.png"
+        );
     }
 
     create() {
@@ -83,7 +116,8 @@ class HouseScene extends Phaser.Scene {
     /* =====================================
        TEXTURES & ANIMAÇÕES (PROCEDURAL 2.5D)
        Paleta fiel ao Arthur_OlhoAberto.png
-       Sprite voltado para a DIREITA (padrão Phaser; flipX=true para esquerda)
+       Os frames originais de Arthur estão voltados para a ESQUERDA.
+       flipX=true aponta o personagem para a DIREITA.
        Personalidade: postura curvada, mão no bolso, cabelo espetado
     ===================================== */
 
@@ -320,20 +354,20 @@ class HouseScene extends Phaser.Scene {
         this.anims.create({
             key: "arthur_idle",
             frames: [
-                { key: "arthur_idle_0" },
-                { key: "arthur_idle_1" }
+                { key: "arthur_idle_open" },
+                { key: "arthur_idle_closed" }
             ],
-            frameRate: 2,
+            frameRate: 1.5,
             repeat: -1
         });
 
         this.anims.create({
             key: "arthur_walk",
             frames: [
-                { key: "arthur_walk_0" },
                 { key: "arthur_walk_1" },
+                { key: "arthur_idle_open" },
                 { key: "arthur_walk_2" },
-                { key: "arthur_walk_3" }
+                { key: "arthur_idle_closed" }
             ],
             frameRate: 8,
             repeat: -1
@@ -342,10 +376,10 @@ class HouseScene extends Phaser.Scene {
         this.anims.create({
             key: "arthur_run",
             frames: [
-                { key: "arthur_walk_0" },
                 { key: "arthur_walk_1" },
+                { key: "arthur_idle_open" },
                 { key: "arthur_walk_2" },
-                { key: "arthur_walk_3" }
+                { key: "arthur_idle_closed" }
             ],
             frameRate: 14,
             repeat: -1
@@ -358,19 +392,55 @@ class HouseScene extends Phaser.Scene {
     ===================================== */
 
     createArthur() {
-        // Sombra nos pés ancorada no chão
+        /*
+         * SOMBRA DO PERSONAGEM
+         * --------------------
+         * A sombra é um objeto separado do sprite. Isso permite que ela fique
+         * sempre ancorada aos pés, mesmo enquanto o corpo é escalado pela
+         * profundidade da sala. A origem fica no centro da elipse.
+         */
         this.shadow = this.add.image(85, 290, "arthur_shadow");
         this.shadow.setOrigin(0.5, 0.5);
 
-        // Sprite do Arthur
-        this.arthur = this.physics.add.sprite(85, 290, "arthur_idle_0");
+        /*
+         * SPRITE PRINCIPAL
+         * ----------------
+         * A origem (0.5, 1) representa exatamente o ponto central dos pés.
+         * Assim, mudar a posição Y não faz o personagem flutuar: o deslocamento
+         * sempre acontece a partir da base da imagem.
+         *
+         * A arte original foi desenhada olhando para a ESQUERDA. Por isso,
+         * flipX=false é o estado natural e flipX=true espelha para a DIREITA.
+         *
+         * A escala inicial de 0.72 transforma a textura de 128 px em cerca de
+         * 92 px visuais, deixando o Arthur compatível com a estante, janela
+         * e demais elementos do cenário.
+         */
+        this.arthur = this.physics.add.sprite(85, 290, "arthur_idle_open");
         this.arthur.setOrigin(0.5, 1);
+        this.arthur.setScale(ARTHUR_INITIAL_SCALE);
+        this.arthur.setFlipX(false);
         this.arthur.setCollideWorldBounds(true);
 
-        // Hitbox focada na base dos pés (sprite 36x68)
-        // offset x = (36 - 18) / 2 = 9; offset y = 68 - 12 = 56
-        this.arthur.body.setSize(18, 12);
-        this.arthur.body.setOffset(9, 56);
+        /*
+         * HITBOX DE COLISÃO
+         * -----------------
+         * O retângulo vermelho da hitbox não precisa cobrir cabelo, braços ou
+         * tronco: em jogos 2.5D, colisões úteis geralmente usam uma área curta
+         * e larga próxima aos pés.
+         *
+         * - width/height usam coordenadas da imagem original de 96 x 128.
+         * - offsetX deixa a caixa centralizada no eixo horizontal.
+         * - offsetY começa próximo às botas, no fim da textura.
+         */
+        this.arthur.body.setSize(
+            ARTHUR_HITBOX_WIDTH,
+            ARTHUR_HITBOX_HEIGHT
+        );
+        this.arthur.body.setOffset(
+            ARTHUR_HITBOX_OFFSET_X,
+            ARTHUR_HITBOX_OFFSET_Y
+        );
 
         this.arthur.play("arthur_idle");
 
@@ -664,7 +734,12 @@ class HouseScene extends Phaser.Scene {
     ===================================== */
 
     updateMovement() {
-        // Pausa durante diálogo
+        /*
+         * PAUSA DURANTE DIÁLOGO
+         * ---------------------
+         * Quando uma interação está aberta, o Arthur reduz a velocidade com
+         * atrito suave, para não parar abruptamente, e volta ao idle.
+         */
         if (this.isDialogueActive) {
             this.arthur.setVelocity(
                 Phaser.Math.Linear(this.arthur.body.velocity.x, 0, DRAG_RATE),
@@ -679,7 +754,16 @@ class HouseScene extends Phaser.Scene {
             return;
         }
 
-        // Lê entradas combinadas (Phaser Key + Window Event)
+        /*
+         * ENTRADAS DE MOVIMENTO
+         * ---------------------
+         * Existem duas fontes de controle:
+         * 1. teclas conhecidas pelo sistema Phaser;
+         * 2. fallback nativo do navegador, usado enquanto o canvas mantém foco.
+         *
+         * Os dois grupos são combinados com OR, evitando que o movimento pare
+         * caso uma das APIs não capture o evento em determinado navegador.
+         */
         const left = (this.keys.left && this.keys.left.isDown) ||
                      (this.keys.a && this.keys.a.isDown) ||
                      this.rawKeys.left || this.rawKeys.a;
@@ -707,7 +791,12 @@ class HouseScene extends Phaser.Scene {
         if (up && !down) dirY = -1;
         else if (down && !up) dirY = 1;
 
-        // Normalização diagonal para velocidade consistente
+        /*
+         * NORMALIZAÇÃO DIAGONAL
+         * ---------------------
+         * Em movimento diagonal, cada eixo recebe 70,71% da velocidade. Sem
+         * isso, andar na diagonal seria aproximadamente 41% mais rápido.
+         */
         if (dirX !== 0 && dirY !== 0) {
             dirX *= 0.7071;
             dirY *= 0.7071;
@@ -745,11 +834,20 @@ class HouseScene extends Phaser.Scene {
             }
         }
 
-        // Direção horizontal do olhar
+        /*
+         * DIREÇÃO HORIZONTAL DA ARTE
+         * --------------------------
+         * Os PNGs originais já foram desenhados olhando para a ESQUERDA.
+         * Portanto, andar pela esquerda mantém flipX=false. Ao andar para
+         * a direita, flipX=true espelha toda a imagem no eixo horizontal.
+         *
+         * Todos os elementos associados ao personagem usam esse mesmo sinal:
+         * inclinação corporal, look-ahead da câmera e partículas dos passos.
+         */
         if (dirX < 0) {
-            this.arthur.setFlipX(true);
-        } else if (dirX > 0) {
             this.arthur.setFlipX(false);
+        } else if (dirX > 0) {
+            this.arthur.setFlipX(true);
         }
 
         const totalSpeed = Math.hypot(this.arthur.body.velocity.x, this.arthur.body.velocity.y);
@@ -761,12 +859,12 @@ class HouseScene extends Phaser.Scene {
                 if (this.arthur.anims.currentAnim?.key !== "arthur_run") {
                     this.arthur.play("arthur_run", true);
                 }
-                targetAngle = this.arthur.flipX ? -3.5 : 3.5;
+                targetAngle = this.arthur.flipX ? 3.5 : -3.5;
             } else {
                 if (this.arthur.anims.currentAnim?.key !== "arthur_walk") {
                     this.arthur.play("arthur_walk", true);
                 }
-                targetAngle = this.arthur.flipX ? -1.2 : 1.2;
+                targetAngle = this.arthur.flipX ? 1.2 : -1.2;
             }
 
             // Partículas de poeira nos passos
@@ -789,7 +887,7 @@ class HouseScene extends Phaser.Scene {
         );
 
         // Look-ahead dinâmico da câmera
-        const lookAheadTarget = this.arthur.flipX ? 45 : -45;
+        const lookAheadTarget = this.arthur.flipX ? -45 : 45;
         this.cameraLookAheadX = Phaser.Math.Linear(
             this.cameraLookAheadX,
             lookAheadTarget,
@@ -804,18 +902,38 @@ class HouseScene extends Phaser.Scene {
     ===================================== */
 
     updateDepthAndScale() {
+        /*
+         * Y-SORT E ESCALA PERSPECTIVA
+         * ---------------------------
+         * Quanto maior a coordenada Y, mais próximo o Arthur está da câmera.
+         * O depth usa essa posição para garantir que objetos e personagens com
+         * Y menor sejam desenhados atrás; já a escala cresce suavemente para
+         * que o personagem pareça se aproximar ao descer pela sala.
+         */
         const dynamicDepth = Math.round(this.arthur.y);
         this.arthur.setDepth(dynamicDepth);
 
         const depthT = Phaser.Math.Clamp((this.arthur.y - MIN_Y) / (MAX_Y - MIN_Y), 0, 1);
-        const targetScale = Phaser.Math.Linear(0.84, 1.06, depthT);
+        const targetScale = Phaser.Math.Linear(
+            ARTHUR_SCALE_BACK,
+            ARTHUR_SCALE_FRONT,
+            depthT
+        );
 
-        if (Math.abs(this.arthur.scaleX - targetScale) > 0.005) {
-            this.arthur.setScale(targetScale);
+        // Preservar o flipX ao atualizar a escala. setScale altera apenas o
+        // tamanho visual; flipX continua responsável pela direção da imagem.
+        if (Math.abs(Math.abs(this.arthur.scaleX) - targetScale) > 0.005 ||
+            Math.abs(this.arthur.scaleY - targetScale) > 0.005) {
+            this.arthur.setScale(targetScale, targetScale);
         }
 
+        // A sombra acompanha exatamente os pés e também recebe uma pequena
+        // ampliação para parecer mais larga que o personagem em perspectiva.
         this.shadow.setPosition(this.arthur.x, this.arthur.y);
-        this.shadow.setScale(this.arthur.scaleX, this.arthur.scaleY);
+        this.shadow.setScale(
+            this.arthur.scaleX * 1.5,
+            this.arthur.scaleY * 1.5
+        );
         this.shadow.setDepth(dynamicDepth - 1);
     }
 
@@ -825,7 +943,7 @@ class HouseScene extends Phaser.Scene {
     ===================================== */
 
     emitStepDust() {
-        const dustOffsetX = this.arthur.flipX ? 5 : -5;
+        const dustOffsetX = this.arthur.flipX ? -5 : 5;
         const dust = this.add.image(
             this.arthur.x + dustOffsetX,
             this.arthur.y - 1,

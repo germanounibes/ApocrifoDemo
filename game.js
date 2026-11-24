@@ -14,27 +14,32 @@ const MIN_Y = 248;           // Fundo da sala (junto à parede/rodapé)
 const MAX_Y = 342;           // Frente da sala (próximo à borda inferior)
 
 // Velocidades de movimentação
-const WALK_SPEED_X = 96;     // Caminhada horizontal
-const WALK_SPEED_Y = 64;     // Caminhada em profundidade (~66% da horizontal para perspectiva 2.5D)
-const RUN_SPEED_X = 180;     // Corrida horizontal (Shift)
-const RUN_SPEED_Y = 118;     // Corrida em profundidade (Shift)
+const WALK_SPEED_X = 125;     // Caminhada horizontal
+const WALK_SPEED_Y = 120;     // Caminhada em profundidade (~66% da horizontal para perspectiva 2.5D)
+const RUN_SPEED_X = 200;     // Corrida horizontal (Shift)
+const RUN_SPEED_Y = 170;     // Corrida em profundidade (Shift)
 
-const ACCEL_RATE = 0.16;     // Inércia de aceleração
-const DRAG_RATE = 0.20;      // Desaceleração suave ao soltar
+const ACCEL_RATE = 1;     // Inércia de aceleração
+const DRAG_RATE = 1;      // Desaceleração suave ao soltar
 
 // Escala visual do Arthur em relação à imagem original de 96 x 128 px.
 // A arte fica maior ao chegar à frente da sala e menor perto da parede,
 // preservando a proporção típica de uma vista 2.5D.
-const ARTHUR_SCALE_BACK = 0.66;
-const ARTHUR_SCALE_FRONT = 0.82;
-const ARTHUR_INITIAL_SCALE = 0.72;
+const ARTHUR_SCALE_BACK = 1;
+const ARTHUR_SCALE_FRONT = 1.2;
+const ARTHUR_INITIAL_SCALE = 1;
 
 // Hitbox em coordenadas locais da textura original. Ela é pequena apenas
 // na região dos pés, onde o personagem deve colidir com móveis e limites.
-const ARTHUR_HITBOX_WIDTH = 44;
-const ARTHUR_HITBOX_HEIGHT = 16;
-const ARTHUR_HITBOX_OFFSET_X = 26;
-const ARTHUR_HITBOX_OFFSET_Y = 112;
+const ARTHUR_HITBOX_WIDTH = 40;
+const ARTHUR_HITBOX_HEIGHT = 14;
+const ARTHUR_HITBOX_OFFSET_X = 28;
+const ARTHUR_HITBOX_OFFSET_Y = 114;
+
+// Proporção da sombra em relação ao sprite. No eixo Y ela permanece fina,
+// simulando uma sombra no chão em vez de um círculo preso ao personagem.
+const ARTHUR_SHADOW_SCALE_X = 1.8;
+const ARTHUR_SHADOW_SCALE_Y = 1.0;
 
 
 /* =========================================
@@ -73,7 +78,7 @@ class HouseScene extends Phaser.Scene {
             HEIGHT
         );
 
-        // 1. Texturas procedurais
+        // 1. Texturas auxiliares e animações
         this.createTextures();
 
         // 2. Criação do Arthur primeiro para garantir que existe para os colisores
@@ -114,232 +119,14 @@ class HouseScene extends Phaser.Scene {
 
 
     /* =====================================
-       TEXTURES & ANIMAÇÕES (PROCEDURAL 2.5D)
-       Paleta fiel ao Arthur_OlhoAberto.png
-       Os frames originais de Arthur estão voltados para a ESQUERDA.
-       flipX=true aponta o personagem para a DIREITA.
-       Personalidade: postura curvada, mão no bolso, cabelo espetado
+       TEXTURAS AUXILIARES E ANIMAÇÕES
     ===================================== */
 
     createTextures() {
-        // Paleta extraída de Arthur_OlhoAberto.png
-        const C = {
-            hair:      0xb27343,
-            hairD:     0x7d4722,
-            hairL:     0xca8b59,
-            hairOut:   0x1e0e06,
-            skin:      0xd8ad8e,
-            skinD:     0xb08365,
-            brow:      0x1e0f07,
-            eyeW:      0xe8ddd6,
-            eyeI:      0x583216,
-            eyeP:      0x180c05,
-            nose:      0x5e361d,
-            mouth:     0x341b0d,
-            coat:      0x210b4d,
-            coatD:     0x120530,
-            coatH:     0x35186e,
-            coatC:     0x43208a,
-            shirt:     0x766666,
-            shirtD:    0x5a4d4d,
-            btn:       0x1a1218,
-            jeans:     0x224487,
-            jeansD:    0x142954,
-            jeansL:    0x2e56a3,
-            boot:      0x2a0001,
-            bootD:     0x120001
-        };
-
-        // ================================================================
-        // drawFrame: 36x68 px, voltado para a DIREITA por padrão.
-        // Personalidade: postura curvada, mão no bolso, cabelo espetado.
-        // ================================================================
-        const drawFrame = (key, cfg) => {
-            const g = this.make.graphics({ x: 0, y: 0, add: false });
-            const by = cfg.by || 0;
-
-            const r = (x, y, w, h, col) => { g.fillStyle(col); g.fillRect(x, y, w, h); };
-            const p = (x, y, col)       => { g.fillStyle(col); g.fillRect(x, y, 1, 1); };
-
-            // 1. CAPUZ TRASEIRO (atrás e à esquerda)
-            r(1, by+22, 11, 12, C.coatH);
-            r(0, by+24,  4,  9, C.coatD);
-
-            // 2. CABELO TRASEIRO
-            r(3, by+ 9,  5, 5, C.hairD);
-            r(1, by+ 7,  5, 4, C.hair);
-            r(0, by+ 5,  4, 3, C.hairD);
-
-            // 3. TOPO ESPETADO (tufos pontiagudos indo para a direita)
-            r(6,  by+2,  3, 3, C.hair);  p(7,  by+1, C.hairL); p(7,  by+0, C.hairL);
-            r(10, by+1,  4, 4, C.hair);  p(11, by+0, C.hairL); p(12, by+0, C.hairL);
-            r(14, by+0,  4, 5, C.hair);  r(15, by+0, 2, 1, C.hairL);
-            r(18, by+1,  5, 5, C.hair);  p(20, by+1, C.hairL);
-            r(22, by+3,  4, 4, C.hair);  p(23, by+3, C.hairL);
-
-            // 4. MASSA PRINCIPAL DO CABELO
-            r(5,  by+4, 22, 9, C.hair);
-            r(5,  by+5,  4, 8, C.hairD);
-            r(23, by+5,  5, 7, C.hairD);
-
-            // 5. FRANJA CAINDO (mecha longa sobre o nariz, marca registrada)
-            r(16, by+ 7,  5, 6, C.hair);
-            r(21, by+ 7,  5, 5, C.hairD);
-            r(17, by+11,  3, 7, C.hair);
-            r(18, by+13,  2, 5, C.hairD);
-            p(18, by+18, C.hairD);
-
-            // 6. ROSTO (voltado para a DIREITA)
-            r(10, by+ 9, 18, 14, C.skin);
-            // orelha (à esquerda do rosto)
-            r(8,  by+13,  3,  5, C.skin);
-            r(7,  by+14,  2,  4, C.skinD);
-            // queixo
-            r(13, by+21, 10,  3, C.skin);
-            r(14, by+22,  8,  2, C.skinD);
-
-            // 7. OLHOS EXPRESSIVOS / CAÍDOS
-            // Sobrancelhas pesadas
-            r(14, by+13,  5, 2, C.brow);
-            r(21, by+12,  6, 2, C.brow);
-            p(14, by+15, C.brow); p(21, by+14, C.brow);
-
-            // Olho esquerdo (parcialmente encoberto pela franja)
-            r(15, by+15,  3, 3, C.eyeW);
-            r(16, by+15,  2, 3, C.eyeI);
-            p(16, by+16, C.eyeP);
-
-            // Olho direito (maior, expressivo, brilho)
-            r(22, by+14,  5, 3, C.eyeW);
-            r(23, by+14,  3, 3, C.eyeI);
-            r(24, by+15,  2, 2, C.eyeP);
-            p(22, by+14, 0xffffff);
-
-            // Nariz e boca melancólica
-            r(22, by+17,  1, 4, C.nose);
-            p(21, by+20, C.nose);
-            r(19, by+22,  4, 1, C.mouth);
-            p(18, by+22, C.mouth);
-
-            // 8. GOLA CAPUZ E CORDÕES
-            r(10, by+23, 18, 4, C.coatH);
-            r(10, by+25, 18, 3, C.coat);
-            r(17, by+26,  1, 7, C.coatD);
-            r(20, by+26,  1, 7, C.coatD);
-
-            // 9. TORSO DO CASACO (postura curvada)
-            r(8,  by+27, 22, 21, C.coat);
-            r(6,  by+29,  3, 17, C.coatD);
-            r(7,  by+28,  2, 18, C.coat);
-
-            // Camisa interna com botões
-            r(17, by+27,  7, 20, C.shirt);
-            r(16, by+27,  1, 20, C.shirtD);
-            r(24, by+27,  1, 20, C.shirtD);
-            r(20, by+29,  2,  2, C.btn);
-            r(20, by+33,  2,  2, C.btn);
-            r(20, by+37,  2,  2, C.btn);
-            r(20, by+41,  2,  2, C.btn);
-
-            // Dobras de tecido (personalidade)
-            r(9,  by+36,  7, 2, C.coatD);
-            r(10, by+43,  6, 2, C.coatD);
-
-            // 10. BRAÇO ESQUERDO (traseiro)
-            r(7,  by+29,  4, 15, C.coatD);
-            r(7,  by+43,  4,  3, C.coatC);
-            r(7,  by+46,  4,  4, C.skinD);
-
-            // 11. BRAÇO DIREITO (da frente, MÃO NO BOLSO)
-            const arx = cfg.arm_r_x || 26;
-            r(arx,   by+29, 6, 15, C.coat);
-            r(arx+4, by+31, 2, 12, C.coatD);
-            r(arx,   by+43, 6,  3, C.coatC);
-            p(arx+4, by+45, C.btn);
-            r(arx+1, by+46, 4,  3, C.skin);
-            r(arx+2, by+48, 2,  1, C.skinD);
-
-            // 12. CÓS + CALÇA JEANS
-            r(10, 46, 18, 5, C.jeans);
-            r(10, 47,  3, 4, C.jeansD);
-
-            // Perna esquerda
-            const lx=cfg.lx||10, ly=cfg.ly||49, lw=cfg.lw||8, lh=cfg.lh||19;
-            r(lx, ly, lw, lh, C.jeans);
-            r(lx, ly+3, 2, lh-4, C.jeansD);
-            r(lx+2, ly+2, Math.max(1,lw-4), lh-4, C.jeansL);
-            r(lx, ly+lh-3, lw, 3, C.jeansD);
-
-            // Perna direita
-            const rx=cfg.rx||19, ry=cfg.ry||49, rw=cfg.rw||9, rh=cfg.rh||19;
-            r(rx, ry, rw, rh, C.jeans);
-            r(rx+1, ry+2, Math.max(1,rw-4), rh-4, C.jeansL);
-            r(rx+Math.max(1,rw-2), ry+3, 2, rh-4, C.jeansD);
-            r(rx, ry+rh-3, rw, 3, C.jeansD);
-
-            r(18, 50, 2, 15, C.jeansD); // divisão central
-
-            // 13. BOTAS BORDÔ
-            const slx=cfg.slx||7, sly=cfg.sly||60, slw=cfg.slw||10;
-            r(slx,   sly,   slw, 5, C.boot);
-            r(slx-1, sly+2,  3,  4, C.boot);
-            r(slx-1, sly+5, slw+2, 2, C.bootD);
-
-            const srx=cfg.srx||19, sry=cfg.sry||60, srw=cfg.srw||12;
-            r(srx,   sry,   srw, 5, C.boot);
-            r(srx+srw-1, sry+1, 3, 4, C.boot);
-            r(srx, sry+5, srw+3, 2, C.bootD);
-
-            g.generateTexture(key, 36, 68);
-            g.destroy();
-        };
-
-        // Frame 0: Idle Neutro
-        drawFrame("arthur_idle_0", {
-            by:0, arm_r_x:26,
-            lx:10,ly:49,lw:8,lh:18, rx:19,ry:49,rw:9,rh:18,
-            slx:7,sly:60,slw:10,    srx:20,sry:60,srw:12
-        });
-
-        // Frame 1: Idle Respiração (tronco sobe 1px)
-        drawFrame("arthur_idle_1", {
-            by:-1, arm_r_x:26,
-            lx:10,ly:49,lw:8,lh:18, rx:19,ry:49,rw:9,rh:18,
-            slx:7,sly:60,slw:10,    srx:20,sry:60,srw:12
-        });
-
-        // Frame 2: Walk Passo 1 (perna direita avança)
-        drawFrame("arthur_walk_0", {
-            by:0, arm_r_x:27,
-            lx:8, ly:50,lw:8,lh:16, rx:20,ry:48,rw:10,rh:19,
-            slx:5,sly:59,slw:10,    srx:22,sry:60,srw:12
-        });
-
-        // Frame 3: Walk Passagem 1
-        drawFrame("arthur_walk_1", {
-            by:-1, arm_r_x:26,
-            lx:12,ly:49,lw:7,lh:18, rx:18,ry:49,rw:8,rh:18,
-            slx:10,sly:60,slw:9,    srx:19,sry:60,srw:11
-        });
-
-        // Frame 4: Walk Passo 2 (perna esquerda avança)
-        drawFrame("arthur_walk_2", {
-            by:0, arm_r_x:25,
-            lx:14,ly:48,lw:10,lh:19, rx:18,ry:50,rw:8,rh:16,
-            slx:14,sly:60,slw:12,    srx:20,sry:59,srw:10
-        });
-
-        // Frame 5: Walk Passagem 2
-        drawFrame("arthur_walk_3", {
-            by:-1, arm_r_x:26,
-            lx:13,ly:49,lw:7,lh:18, rx:18,ry:49,rw:8,rh:18,
-            slx:11,sly:60,slw:10,   srx:19,sry:60,srw:11
-        });
-
         // Sombra elíptica sob os pés
         const shadowG = this.make.graphics({ x: 0, y: 0, add: false });
         shadowG.fillStyle(0x0e0c10, 0.45);
-        shadowG.fillEllipse(13, 5, 13, 5);
+        shadowG.fillEllipse(13, 5, 26, 10);
         shadowG.generateTexture("arthur_shadow", 26, 10);
         shadowG.destroy();
 
@@ -357,7 +144,7 @@ class HouseScene extends Phaser.Scene {
                 { key: "arthur_idle_open" },
                 { key: "arthur_idle_closed" }
             ],
-            frameRate: 1.5,
+            frameRate: 1.8,
             repeat: -1
         });
 
@@ -369,7 +156,7 @@ class HouseScene extends Phaser.Scene {
                 { key: "arthur_walk_2" },
                 { key: "arthur_idle_closed" }
             ],
-            frameRate: 8,
+            frameRate: 6,
             repeat: -1
         });
 
@@ -412,9 +199,8 @@ class HouseScene extends Phaser.Scene {
          * A arte original foi desenhada olhando para a ESQUERDA. Por isso,
          * flipX=false é o estado natural e flipX=true espelha para a DIREITA.
          *
-         * A escala inicial de 0.72 transforma a textura de 128 px em cerca de
-         * 92 px visuais, deixando o Arthur compatível com a estante, janela
-         * e demais elementos do cenário.
+         * A escala inicial usa o tamanho real da textura (96 x 128 px) e varia
+         * com a profundidade para preservar a proporção da cena.
          */
         this.arthur = this.physics.add.sprite(85, 290, "arthur_idle_open");
         this.arthur.setOrigin(0.5, 1);
@@ -927,12 +713,13 @@ class HouseScene extends Phaser.Scene {
             this.arthur.setScale(targetScale, targetScale);
         }
 
-        // A sombra acompanha exatamente os pés e também recebe uma pequena
-        // ampliação para parecer mais larga que o personagem em perspectiva.
-        this.shadow.setPosition(this.arthur.x, this.arthur.y);
+        // O sprite mede 96 px de largura e os pés ocupam quase toda essa largura.
+        // A sombra usa uma escala maior que a elipse antiga, mantendo-se no
+        // mesmo eixo dos pés mesmo quando o personagem vira ou muda de tamanho.
+        this.shadow.setPosition(this.arthur.x, this.arthur.y - 6);
         this.shadow.setScale(
-            this.arthur.scaleX * 1.5,
-            this.arthur.scaleY * 1.5
+            targetScale * ARTHUR_SHADOW_SCALE_X,
+            targetScale * ARTHUR_SHADOW_SCALE_Y
         );
         this.shadow.setDepth(dynamicDepth - 1);
     }
@@ -1057,8 +844,8 @@ const config = {
     width: WIDTH,
     height: HEIGHT,
     backgroundColor: "#171319",
-    pixelArt: true,
-    roundPixels: true,
+    pixelArt: false,
+    roundPixels:true,
     physics: {
         default: "arcade",
         arcade: {
